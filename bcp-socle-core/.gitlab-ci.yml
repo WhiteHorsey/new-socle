@@ -1,0 +1,125 @@
+stages:
+  - compile
+  - check
+  - package
+  - release
+  - publish
+
+
+compile:
+  stage: compile
+  image: $DOCKER_PATH/gradle:$GRADLE_VERSION
+  script:
+    - gradle compileJava -x check --no-daemon
+  only:
+    - branches
+  cache:
+    paths:
+      - .gradle/
+  artifacts:
+    paths:
+      - src/$MODULE_PREFIX-application/build/classes/
+      - src/$MODULE_PREFIX-application/build/generated/
+      - src/$MODULE_PREFIX-model/build/classes/
+      - src/$MODULE_PREFIX-model/build/generated/
+      - src/domain/build/classes/
+      - src/domain/build/generated/
+      - src/service/build/classes/
+      - src/service/build/generated/
+      - src/web/build/classes/
+      - src/web/build/generated/
+      - src/jobs/build/classes/
+      - src/jobs/build/generated/
+      - src/domain-adapter/build/classes/
+      - src/domain-adapter/build/generated/
+      - src/service-adapter/build/classes/
+      - src/service-adapter/build/generated/
+      - src/web-adapter/build/classes/
+      - src/web-adapter/build/generated/
+      - src/jobs-adapter/build/classes/
+      - src/jobs-adapter/build/generated/
+      - build/classes/
+      - build/generated/
+    expire_in: 1 day
+
+
+test:
+  stage: check
+  image: $DOCKER_PATH/gradle:$GRADLE_VERSION
+  script:
+    - gradle test
+  cache:
+    paths:
+      - .gradle/
+  only:
+    - branches
+
+sq-analyze-release:
+  stage: check
+  image: $DOCKER_PATH/gradle:$GRADLE_VERSION
+  script:
+    - gradle jacocoTestReport --no-daemon
+    - gradle dependencyCheckAggregate  --no-daemon
+    - gradle sonarqube --no-daemon -x test -Dsonar.host.url=$SONARQUBE_URL -Dsonar.login=$SONARQUBE_TOKEN -Dsonar.projectName=$CI_PROJECT_NAMESPACE::$CI_PROJECT_NAME::release -Dsonar.projectKey=$CI_PROJECT_NAME:release -Dsonar.gitlab.commit_sha=$CI_COMMIT_SHA -Dsonar.gitlab.ref_name=$CI_COMMIT_REF_NAME -Dsonar.gitlab.project_id=$CI_PROJECT_ID  -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/report.xml -Dsonar.dependencyCheck.reportPath=build/reports/dependency-check-report.xml -Dsonar.dependencyCheck.htmlReportPath=build/reports/dependency-check-report.html
+  allow_failure: true
+  cache:
+    paths:
+      - .gradle/
+  only:
+    - /^release.*$/
+  artifacts:
+    paths:
+      - build/reports/
+    expire_in: 1 day
+
+sq-analyze-develop:
+  stage: check
+  image: $DOCKER_PATH/gradle:$GRADLE_VERSION
+  script:
+    - gradle test
+    - gradle jacocoTestReport --no-daemon
+    - gradle dependencyCheckAggregate  --no-daemon
+    - gradle sonarqube --no-daemon -x test -Dsonar.host.url=$SONARQUBE_URL -Dsonar.login=$SONARQUBE_TOKEN -Dsonar.projectName=$CI_PROJECT_NAMESPACE::$CI_PROJECT_NAME::develop -Dsonar.projectKey=$CI_PROJECT_NAME:develop -Dsonar.gitlab.commit_sha=$CI_COMMIT_SHA -Dsonar.gitlab.ref_name=$CI_COMMIT_REF_NAME -Dsonar.gitlab.project_id=$CI_PROJECT_ID -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/report.xml -Dsonar.dependencyCheck.reportPath=build/reports/dependency-check-report.xml -Dsonar.dependencyCheck.htmlReportPath=build/reports/dependency-check-report.html
+  allow_failure: true
+  cache:
+    paths:
+      - .gradle/
+  only:
+    - develop
+    - feat/test_performance
+  artifacts:
+    paths:
+      - build/reports/
+    expire_in: 1 day
+
+package:
+    stage: package
+    image: $DOCKER_PATH/gradle:$GRADLE_VERSION
+    script:
+        - gradle --no-daemon assemble -Pjboss=true -x test
+        - gradle  assemble  -x test
+        - mkdir artefacts
+        #- mv build/libs/*.jar artefacts/$PROJECT_NAME.jar || mv src/$MODULE_PREFIX-application/build/libs/*.jar artefacts/$PROJECT_NAME.jar || mv src/web-adapter/build/libs/*.jar artefacts/$PROJECT_NAME.jar
+        - mv build/libs/*.war artefacts/$PROJECT_NAME.war || mv src/$MODULE_PREFIX-application/build/libs/*.war artefacts/$PROJECT_NAME.war || mv src/web-adapter/build/libs/*.war artefacts/$PROJECT_NAME.war || mv build/libs/*.jar artefacts/$PROJECT_NAME.jar || mv src/$MODULE_PREFIX-application/build/libs/*.jar artefacts/$PROJECT_NAME.jar || mv src/web-adapter/build/libs/*.jar artefacts/$PROJECT_NAME.jar
+
+    artifacts:
+        paths:
+            - artefacts
+        expire_in: 1 day
+    only:
+        - develop
+        - /^release.*$/
+        - /^hotfix.*$/
+        - feat/test_performance
+    
+Publish :
+  stage: publish
+  script:
+    - gradle publish -Pversion=1.0.3 -PnexusUser=${NEXUS_USER} -PnexusPassword=${NEXUS_PASSWORD}
+  retry: 2
+  only:
+    - master
+
+
+
+
