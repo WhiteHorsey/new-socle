@@ -1,13 +1,6 @@
 buildscript {
     repositories {
-        maven {
-            url "http://repo.gbp.cpm.net/repository/maven-public"
-            allowInsecureProtocol = true
-            credentials {
-                username "bcp"
-                password "b*e0e!XMJ03Y"
-            }
-        }
+        mavenCentral()
     }
 
     ext {
@@ -45,14 +38,7 @@ configurations {
 }
 
 repositories {
-    maven {
-        url "http://repo.gbp.cpm.net/repository/maven-public"
-        allowInsecureProtocol = true
-        credentials {
-            username "bcp"
-            password "b*e0e!XMJ03Y"
-        }
-    }
+    mavenCentral()
 }
 
 dependencies {
